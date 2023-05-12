@@ -32,7 +32,6 @@
  * vector addition. It is the same as the sample illustrating Chapter 2
  * of the programming guide with some additions like error checking.
  */
-
 #include <stdio.h>
 #include <cmath>
 
@@ -45,10 +44,24 @@
 
 #include <nvrtc_helper.h>
 
-/**
- * Host main routine
- */
+
+// on H100, cudaFuncCachePreferL1,     Shared Memory Configuration Size           Kbyte           65.54
+// on H100, cudaFuncCachePreferShared, Shared Memory Configuration Size           Kbyte           65.54
 int main(int argc, char **argv) {
+
+    int dev_id = 0;
+    cudaSetDevice(dev_id);
+
+    // cudaFuncCache cache_config = cudaFuncCachePreferShared;//cudaFuncCachePreferL1;
+    cudaFuncCache cache_config = cudaFuncCachePreferL1;//cudaFuncCachePreferL1;
+    cudaDeviceSetCacheConfig(cache_config);
+
+    cudaFuncCache current_cache_config;
+    cudaDeviceGetCacheConfig(&current_cache_config);
+    std::cout << "Current cache configuration: " << current_cache_config << std::endl;
+
+
+
   char *cubin, *kernel_file;
   size_t cubinSize;
   kernel_file = sdkFindFilePath("vectorAdd_kernel.cu", argv[0]);
@@ -59,7 +72,7 @@ int main(int argc, char **argv) {
   checkCudaErrors(cuModuleGetFunction(&kernel_addr, module, "vectorAdd"));
 
   // Print the vector length to be used, and compute its size
-  int numElements = 50000;
+  int numElements = 50000*1024;
   size_t size = numElements * sizeof(float);
   printf("[Vector addition of %d elements]\n", numElements);
 
@@ -103,7 +116,7 @@ int main(int argc, char **argv) {
   checkCudaErrors(cuMemcpyHtoD(d_B, h_B, size));
 
   // Launch the Vector Add CUDA Kernel
-  int threadsPerBlock = 256;
+  int threadsPerBlock = 32;
   int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
   printf("CUDA kernel launch with %d blocks of %d threads\n", blocksPerGrid,
          threadsPerBlock);
@@ -113,11 +126,15 @@ int main(int argc, char **argv) {
   void *arr[] = {reinterpret_cast<void *>(&d_A), reinterpret_cast<void *>(&d_B),
                  reinterpret_cast<void *>(&d_C),
                  reinterpret_cast<void *>(&numElements)};
+  // cuFuncSetAttribute(
+  //   kernel_addr,
+  //   CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,
+  //   1024*100);                 
   checkCudaErrors(cuLaunchKernel(kernel_addr, cudaGridSize.x, cudaGridSize.y,
                                  cudaGridSize.z, /* grid dim */
                                  cudaBlockSize.x, cudaBlockSize.y,
                                  cudaBlockSize.z, /* block dim */
-                                 0, 0,            /* shared mem, stream */
+                                 threadsPerBlock*sizeof(*h_A), 0,            /* shared mem, stream */
                                  &arr[0],         /* arguments */
                                  0));
   checkCudaErrors(cuCtxSynchronize());
