@@ -44,17 +44,37 @@
 
 #include <nvrtc_helper.h>
 
-
+// check  Shared Memory Configuration Size reported by ncu
+// const int threadsPerBlock = 32;
+//-------------------- cudaDeviceSetCacheConfig -------------------------------------------------------
 // on H100, cudaFuncCachePreferL1,     Shared Memory Configuration Size           Kbyte           65.54
 // on H100, cudaFuncCachePreferShared, Shared Memory Configuration Size           Kbyte           65.54
+// on A100, cudaFuncCachePreferL1,     Shared Memory Configuration Size           Kbyte           65.54
+// on A100, cudaFuncCachePreferShared, Shared Memory Configuration Size           Kbyte           65.54
+
+// cuFuncSetAttribute(
+//   kernel_addr,
+//   CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,
+//   1024*100);  
+// Shared Memory Configuration Size           Kbyte           65.54
+
+// const int threadsPerBlock = 32;
+// Shared Memory Configuration Size           Kbyte           65.54
+
+// const int threadsPerBlock = 256;
+// Shared Memory Configuration Size           Kbyte           32.77
+
+// const int threadsPerBlock = 1024;
+// Shared Memory Configuration Size           Kbyte           16.38
+
 int main(int argc, char **argv) {
 
     int dev_id = 0;
     cudaSetDevice(dev_id);
 
     // cudaFuncCache cache_config = cudaFuncCachePreferShared;//cudaFuncCachePreferL1;
-    cudaFuncCache cache_config = cudaFuncCachePreferL1;//cudaFuncCachePreferL1;
-    cudaDeviceSetCacheConfig(cache_config);
+    // // cudaFuncCache cache_config = cudaFuncCachePreferL1;//cudaFuncCachePreferL1;
+    // cudaDeviceSetCacheConfig(cache_config);
 
     cudaFuncCache current_cache_config;
     cudaDeviceGetCacheConfig(&current_cache_config);
@@ -116,7 +136,7 @@ int main(int argc, char **argv) {
   checkCudaErrors(cuMemcpyHtoD(d_B, h_B, size));
 
   // Launch the Vector Add CUDA Kernel
-  int threadsPerBlock = 32;
+  
   int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
   printf("CUDA kernel launch with %d blocks of %d threads\n", blocksPerGrid,
          threadsPerBlock);
@@ -126,10 +146,14 @@ int main(int argc, char **argv) {
   void *arr[] = {reinterpret_cast<void *>(&d_A), reinterpret_cast<void *>(&d_B),
                  reinterpret_cast<void *>(&d_C),
                  reinterpret_cast<void *>(&numElements)};
-  // cuFuncSetAttribute(
-  //   kernel_addr,
-  //   CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,
-  //   1024*100);                 
+
+  //////////////////////////////////
+  cuFuncSetAttribute(
+    kernel_addr,
+    CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,
+    1024*100);  
+  /////////////////////////////    
+
   checkCudaErrors(cuLaunchKernel(kernel_addr, cudaGridSize.x, cudaGridSize.y,
                                  cudaGridSize.z, /* grid dim */
                                  cudaBlockSize.x, cudaBlockSize.y,
